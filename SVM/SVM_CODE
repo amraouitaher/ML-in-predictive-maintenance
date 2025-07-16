@@ -1,0 +1,78 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import classification_report, confusion_matrix
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+# Data Preparation :
+# Read the data from the CSV file
+df = pd.read_csv("SVM.csv", low_memory=False)
+# Preprocessing
+# Drop the rows with missing values
+df.dropna(inplace=True)
+
+# Convert the 'Global_intensity' column to numeric, coerce errors
+df['Global_intensity'] = pd.to_numeric(df['Global_intensity'], errors='coerce')
+
+# Drop rows where 'Global_intensity' column contains NaN values
+df.dropna(subset=['Global_intensity'], inplace=True)
+
+# Defining the target variable: If Global_intensity is greater than 10, we label it as high, otherwise low
+df['intensity_level'] = df['Global_intensity'].apply(lambda x: 'high' if x > 10 else 'low')
+
+# Splitting the dataset into features and target variable
+X = df.drop(["Global_intensity", "intensity_level"], axis=1)
+y = df["intensity_level"]
+
+# Splitting the dataset into the Training set and Test set
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Feature Scaling :
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Model Training
+svm = SVC(kernel='poly')
+svm.fit(X_train, y_train)
+
+# Model Evaluation
+y_pred = svm.predict(X_test)
+print("Classification Report:\n", classification_report(y_test, y_pred))
+print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+
+# Hyperparameter Tuning
+param_grid = {'C': [10, 100],
+              'gamma': [1, 0.1],
+              'kernel': ['rbf', 'poly', 'linear']}
+grid = GridSearchCV(SVC(), param_grid, refit=True, verbose=3,cv=2)
+grid.fit(X_train, y_train)
+
+print("Best parameters found:", grid.best_params_)
+print("Best estimator found:", grid.best_estimator_)
+
+# Re-train the model with the best parameters
+svm = grid.best_estimator_
+svm.fit(X_train, y_train)
+
+# Model Evaluation with tuned parameters
+y_pred = svm.predict(X_test)
+print("Classification Report (After Hyperparameter Tuning):\n", classification_report(y_test, y_pred))
+print("Confusion Matrix (After Hyperparameter Tuning):\n", confusion_matrix(y_test, y_pred))
+
+# Analyze the importance of different features
+feature_importance = np.abs(svm.coef_[0])
+feature_importance = 100.0 * (feature_importance / feature_importance.max())
+sorted_idx = np.argsort(feature_importance)
+pos = np.arange(sorted_idx.shape[0]) + .5
+
+# Visualize feature importance
+plt.figure(figsize=(10, 8))
+plt.barh(pos, feature_importance[sorted_idx], align='center')
+plt.yticks(pos, X.columns[sorted_idx])
+plt.xlabel('Relative Importance')
+plt.title('Variable Importance')
+plt.show()
